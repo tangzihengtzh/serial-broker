@@ -1,0 +1,6 @@
+/build/
+/build-*/
+/logs/
+/docs/compilation-output.txt
+/.vs/
+*.user
