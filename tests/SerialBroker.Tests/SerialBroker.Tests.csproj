@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>Exe</OutputType><UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms><AssemblyName>SerialBroker.Tests</AssemblyName></PropertyGroup>
+ <ItemGroup><Using Remove="System.Windows.Forms"/><Using Remove="System.Drawing"/><ProjectReference Include="../../ui/SerialBroker.Gui/SerialBroker.Gui.csproj"/></ItemGroup>
+</Project>

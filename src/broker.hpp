@@ -12,6 +12,8 @@ struct Options {
     bool tcp_enabled = true;
     bool dtr = false, rts = false;
     std::filesystem::path log_root;
+    // 仅测试构建支持模拟传输；生产构建会拒绝非空值，不访问真实COM。
+    std::wstring test_pipe;
 };
 struct ClientInfo { std::uint64_t id; std::string name; bool writer; };
 struct Snapshot {

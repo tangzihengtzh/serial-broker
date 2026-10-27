@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup>
+  <OutputType>WinExe</OutputType><UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms>
+  <AssemblyName>SerialBroker</AssemblyName><ApplicationIcon>Assets/SerialBroker.ico</ApplicationIcon>
+ </PropertyGroup>
+ <ItemGroup><Using Remove="System.Windows.Forms"/><Using Remove="System.Drawing"/>
+  <Resource Include="Assets/SerialBroker.ico"/><Resource Include="Assets/SerialBroker.png"/>
+  <InternalsVisibleTo Include="SerialBroker.Tests"/>
+ </ItemGroup>
+ <ItemGroup><ProjectReference Include="../SerialBroker.Core/SerialBroker.Core.csproj"/>
+  <PackageReference Include="ModernWpfUI" Version="0.9.6"/>
+ </ItemGroup>
+</Project>

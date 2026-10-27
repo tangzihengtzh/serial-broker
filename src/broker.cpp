@@ -37,6 +37,9 @@ Handle Broker::make_pipe(bool first) {
 void Broker::start(const Options& options) {
     stop();
     options_ = options;
+#ifndef SB_TEST_TRANSPORT
+    if (!options.test_pipe.empty()) throw std::runtime_error("Test transport is disabled in production");
+#endif
     if (options.port.size() < 4 || options.port.substr(0,3) != L"COM" ||
         options.port.find_first_not_of(L"0123456789",3) != std::wstring::npos ||
         options.port[3] == L'0' || !options.baud || (options.tcp_enabled && !options.tcp_port))
@@ -61,6 +64,17 @@ void Broker::start(const Options& options) {
             u_long nonblock = 1;
             if (ioctlsocket(listener_, FIONBIO, &nonblock)) throw std::runtime_error("Cannot make TCP listener nonblocking");
         }
+#ifdef SB_TEST_TRANSPORT
+        // 单独测试构建以命名管道模拟双向设备，复用真实Broker的收发/分发/日志线程。
+        if (!options.test_pipe.empty()) {
+            if (options.test_pipe.rfind(L"\\\\.\\pipe\\SerialBroker.Test.", 0) != 0)
+                throw std::runtime_error("Invalid isolated test device name");
+            serial_.reset(CreateFileW(options.test_pipe.c_str(), GENERIC_READ | GENERIC_WRITE,
+                                     0, nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr));
+            if (!serial_) throw std::runtime_error("Open test device: " + win_error());
+        } else
+#endif
+        {
         serial_.reset(CreateFileW((L"\\\\.\\" + options.port).c_str(), GENERIC_READ | GENERIC_WRITE,
                                  0, nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr));
         if (!serial_) throw std::runtime_error("Open " + utf8(options.port) + ": " + win_error());
@@ -80,6 +94,7 @@ void Broker::start(const Options& options) {
         timeouts.WriteTotalTimeoutConstant = 3000;
         timeouts.WriteTotalTimeoutMultiplier = (10000 + options.baud - 1) / options.baud;
         if (!SetCommTimeouts(serial_.get(), &timeouts)) throw std::runtime_error("SetCommTimeouts: " + win_error());
+        }
         const auto root = options.log_root.empty() ? std::filesystem::path(L"logs") : options.log_root;
         std::filesystem::create_directories(root);
         auto stamp = timestamp(); std::replace(stamp.begin(), stamp.end(), ':', '-');

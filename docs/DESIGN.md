@@ -1,5 +1,21 @@
 # 串口代理设计与技术决策
 
+## V2.0.0 工作区架构（2026-10-27）
+
+新版GUI位于 `ui/SerialBroker.Gui`，使用.NET8/WPF/ModernWpfUI；`ui/SerialBroker.Core`负责PInvoke、配置历史、COM枚举及端口建议。`src/native_api.cpp`将原Broker封装为C ABI动态库，每个标签持有一个独立句柄，复用本文件下述C++核心收发/权限/日志设计。原Win32界面保留为Legacy构建目标，已不作为V2主界面。
+
+原生回调只复制数据并加入有界队列，不同步等待UI。GUI按100ms定时读取快照和监视项；控制/启停在后台执行，原生实例销毁在I/O及回调结束后进行。各实例拥有独立socket、SerialBroker.COMn管道、线程、写入策略、客户端和日志，GUI标签选择不参与CLI路由。
+
+历史在配置应用时按规范化COM保存，最多200项；主题及窗口几何持久化，不序列化活动连接或监视数据。端口建议不是端口预留，实际绑定失败只影响尝试连接的标签。
+
+`WindowsSerialDevices`使用SetupAPI只读枚举在场设备，从设备注册表的PortName取得实际COM，从SPDRP_FRIENDLYNAME/DEVICEDESC取得设备管理器友好名称。`PortInfo`将显示文本和COM身份分离，`PortCatalog`合并当前设备、SERIALCOMM兜底及历史。GUI的选中内容、下拉项和换行详情保留完整名称，生成ConnectionProfile时映射为COM号；名称不参与命名管道或CreateFile路径。历史额外保存DeviceName供离线辨认，当前系统名称优先于旧缓存；旧记录缺失该字段不影响加载。
+
+主窗口关闭仅隐藏到托盘，显式退出会等待所有实例停止。使用说明放在独立HTML/Markdown文档；GUI只显示连接设置、实际端点及状态，不内嵌终端工具教程。
+
+生产构建禁止测试传输；独立 `SB_TEST_TRANSPORT=ON` 构建以命名管道模拟串口句柄，经过同一核心转发路径。验证范围和真实硬件待验项目见 `VALIDATION.md`。
+
+以下原始章节描述沿用的C++核心及旧版设计背景，GUI具体使用以 `V2-USER-GUIDE.md` 为准。
+
 ## 需求解读
 
 原始要求来自 `docs/原始需求.txt`：MobaXterm 与 Codex 频繁争用同一物理串口，希望双方同时参与串口调试，并由用户承担同时写入的冲突风险。Windows 通常不允许多个进程同时打开同一个串口，因此需要一个长期持有物理口的代理，再接入多个客户端。

@@ -4,3 +4,8 @@
 /docs/compilation-output.txt
 /.vs/
 *.user
+/artifacts/
+**/bin/
+**/obj/
+/.runtime/
+*.trx

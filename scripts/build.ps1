@@ -1,21 +1,17 @@
-param([switch]$Rebuild, [string]$BuildDirectory = 'build')
+param([switch]$Rebuild, [string]$BuildDirectory = 'build', [switch]$Package)
 $ErrorActionPreference = 'Stop'
-$projectRoot = Split-Path -Parent $PSScriptRoot
-Push-Location -LiteralPath $projectRoot
+$root = Split-Path -Parent $PSScriptRoot
+Push-Location -LiteralPath $root
 try {
-    $record = Join-Path $projectRoot 'docs\compilation-output.txt'
-    "Build recorded: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')" | Set-Content -LiteralPath $record -Encoding UTF8
-    "Configure: cmake --preset windows-x64 -B $BuildDirectory" | Add-Content -LiteralPath $record -Encoding UTF8
-    & cmake --preset windows-x64 -B $BuildDirectory 2>&1 | Tee-Object -FilePath $record -Append
-    if ($LASTEXITCODE -ne 0) { throw "CMake configure failed: $LASTEXITCODE" }
+    New-Item -ItemType Directory -Force -Path artifacts/app | Out-Null
+    & cmake -S . -B $BuildDirectory -G 'Visual Studio 17 2022' -A x64 -DSB_TEST_TRANSPORT=OFF
+    if ($LASTEXITCODE -ne 0) { throw 'CMake configuration failed' }
     $buildArgs = @('--build',$BuildDirectory,'--config','Release','--parallel','2')
     if ($Rebuild) { $buildArgs += '--clean-first' }
-    "Build: cmake $($buildArgs -join ' ')" | Add-Content -LiteralPath $record -Encoding UTF8
-    & cmake @buildArgs 2>&1 | Tee-Object -FilePath $record -Append
-    if ($LASTEXITCODE -ne 0) { throw "Build failed: $LASTEXITCODE" }
-    'BUILD_EXIT_CODE=0. No application or test executable was launched.' | Tee-Object -FilePath $record -Append
-    $guiPath = Join-Path $BuildDirectory 'Release\SerialBroker.exe'
-    $cliPath = Join-Path $BuildDirectory 'Release\serialctl.exe'
-    Get-Item -LiteralPath $guiPath,$cliPath |
-        Select-Object Name,Length,LastWriteTime | Format-Table | Out-String | Add-Content -LiteralPath $record -Encoding UTF8
+    & cmake @buildArgs
+    if ($LASTEXITCODE -ne 0) { throw 'Native build failed' }
+    & dotnet publish ui/SerialBroker.Gui/SerialBroker.Gui.csproj -c Release --no-self-contained -o artifacts/app -p:DebugType=None -p:DebugSymbols=false --verbosity minimal
+    if ($LASTEXITCODE -ne 0) { throw 'WPF publish failed' }
+    Copy-Item -LiteralPath "$BuildDirectory/Release/SerialBroker.Native.dll","$BuildDirectory/Release/serialctl.exe" -Destination artifacts/app
+    if ($Package) { & "$PSScriptRoot/package.ps1" }
 } finally { Pop-Location }

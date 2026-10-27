@@ -1,0 +1,170 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Serial Broker V2.0.0 使用指南</title><style>body{font:16px/1.7 'Segoe UI','Microsoft YaHei UI',sans-serif;max-width:960px;margin:40px auto;padding:0 24px;color:#253447;background:#f5f7fb}h1,h2{line-height:1.3;color:#226b80}h2{margin-top:40px}pre,table{background:#fff;border:1px solid #dce4ec;border-radius:10px}pre{padding:16px;overflow:auto}code{font-family:Consolas,monospace;font-size:.92em}table{border-collapse:collapse;width:100%}th,td{padding:10px;border:1px solid #dce4ec;text-align:left}a{color:#226b80}@media(prefers-color-scheme:dark){body{background:#171b24;color:#e7ecf5}pre,table{background:#212735;border-color:#364156}td,th{border-color:#364156}h1,h2,a{color:#8dd1e0}}</style><body><h1>Serial Broker V2.0.0 使用指南</h1>
+<p>这是V2.0.0正式版使用说明。main跟随最新版，旧版本源码归档为V1.0.0；请将新版解压到新目录，保留已有安装。</p>
+<h2>1. 安装与启动</h2>
+<p>解压 <code>SerialBroker-V2.0.0-win-x64.zip</code> 到新的目录，保留完整内容。需要Windows10/11 x64和.NET8 Desktop Runtime（Windows x64）；不是仅安装ASP.NET或普通.NET控制台运行时。</p>
+<ul>
+<li><code>SerialBroker.exe</code>：多串口桌面工作区。</li>
+<li><code>SerialBroker.Native.dll</code>：原C++串口核心的实例化桥接。</li>
+<li><code>serialctl.exe</code>：兼容原版的命令行客户端。</li>
+<li>其它DLL/JSON：GUI运行依赖，不能只复制EXE。</li>
+<li><code>docs/V2-USER-GUIDE.html</code>：可由程序“帮助”按钮离线打开的本说明。</li>
+</ul>
+<p>程序通常不需要管理员权限；当前用户需能访问对应设备和日志路径。启动后显示欢迎页，不会自动连接历史设备，也不会重放旧命令。</p>
+<h2>2. 新建多个串口连接</h2>
+<p>顶部“＋新建连接”或欢迎页按钮创建标签。每个标签对应一个物理COM，设置、状态、客户端、写入策略、监视和日志彼此独立。</p>
+<ol>
+<li>设备备注可自由命名、重名，支持表情；备注只是注释，COM号才是设备身份。</li>
+<li>物理串口框可下拉选择当前/历史端口，也可输入如COM4。下拉候选和选中内容显示设备管理器的友好名称，例如 <code>USB-SERIAL CH340 (COM4)</code> 或 <code>Silicon Labs CP210x USB to UART Bridge (COM7)</code>，不必另开设备管理器辨认。长名称在下方完整换行显示，悬停也能查看原文。“刷新”重新枚举本机设备；历史端口暂时不在线时保留已保存的名称并标明未连接。</li>
+<li>按设备要求填写波特率，格式固定8N1、无流控。</li>
+<li>Telnet可独立启用；给每个同时运行的设备分配不同端口。</li>
+<li>设置日志根目录，按需选择DTR/RTS，点击“连接设备”。</li>
+<li>切换标签查看不同设备；关闭标签只断开这个设备。其它标签继续运行。</li>
+</ol>
+<p>同一个COM不能重复代理。连接前关闭直接打开该COM的其它串口软件；旧版SerialBroker正在使用的端口也不能被新版同时占用。失败只影响当前标签，检查错误后手动重试。</p>
+<p>连接中和连接/断开进行时不能编辑底层连接参数。先断开再改配置。打开串口或改变DTR/RTS可能使某些板卡复位，首次测试前确认板卡要求。</p>
+<h2>3. 历史记录和Telnet端口</h2>
+<p>有效配置在点击连接并通过参数校验时保存，即使之后设备不存在或端口绑定失败，也会记住该配置，便于修正后重试。仅仅创建草稿不会保存一条活动连接。</p>
+<p>历史按规范化COM号（如com004统一为COM4）去重，最近使用在前，最多200项。保存：COM、Windows设备友好名称、波特率、用户备注、Telnet端口/开关、DTR/RTS和日志根目录。不会保存活动连接、RX/TX内容或CLI输入。设备友好名称只供识别，实际打开设备和生成管道时始终使用COM号；驱动未提供名称时退回COM号，旧历史不含名称也可继续使用。在场设备的最新名称优先，不会用旧缓存冒充当前适配器。</p>
+<p>选择历史后回填之前的参数。历史Telnet端口只是默认值，可能已经被其它进程占用，用户可改。新设备端口从7000起，避开历史、当前工作区其它草稿和系统监听端口。用户手动输入端口后，不因继续输入新COM而自动覆盖。建议不会提前预留端口，连接前仍可能被其它进程抢占。</p>
+<p>默认偏好位置：<code>%LOCALAPPDATA%\SerialBroker\workspace\preferences.json</code>。窗口尺寸/位置记录在同目录 <code>window.json</code>。可为独立工作区指定目录：</p>
+<pre><code class="language-powershell">.\SerialBroker.exe --data-directory &quot;D:\SerialWorkspace\preferences&quot;
+</code></pre>
+<p>使用同一个偏好目录的多个程序实例可能互相覆盖偏好，建议使用独立目录；物理COM及Telnet端口仍须分别规划。</p>
+<h2>4. 终端连接（以MobaXterm为例）</h2>
+<p>SerialBroker独占物理串口，终端改为连接该设备的本机Telnet端点：</p>
+<ol>
+<li>新建 <strong>Telnet</strong> 会话。</li>
+<li>地址填写 <code>127.0.0.1</code>，端口填写对应标签的Telnet端口，例如COM4使用7000、COM7使用7001。</li>
+<li>按设备选择字符编码；交互shell建议字符模式，关闭本地行编辑。</li>
+<li>不要再用Serial直接打开COM，也不要把入口当成SSH、Raw TCP或RFC2217。</li>
+</ol>
+<p>每个Telnet会话接收对应设备的RX。代理不会把TX伪装成设备回显；设备没有回显时，可在RX/TX监视里核对发送字节。</p>
+<p>基础Telnet入口只接受本机连接，未提供认证。本机其它进程可能连接；不需要时可在连接前取消启用Telnet。程序不配置系统防火墙，不支持把代理直接当作远程串口服务。</p>
+<h2>5. Agent和CLI</h2>
+<p>命名管道仍按物理串口区分：<code>SerialBroker.COM4</code>、<code>SerialBroker.COM7</code>。默认参数保留旧版COM3，建议自动化始终显式传入目标管道。</p>
+<pre><code class="language-powershell"># 监听COM4；stdout保留原始RX字节
+.\serialctl.exe watch --pipe SerialBroker.COM4
+
+# 发送UTF-8文本并追加回车
+.\serialctl.exe send --pipe SerialBroker.COM4 --text &quot;help&quot; --cr
+
+# 向另一设备发送Ctrl+C原始字节
+.\serialctl.exe send --pipe SerialBroker.COM7 --hex &quot;03&quot;
+
+# 在真实控制台中交互，Enter发送一行和CR，Ctrl+C退出
+.\serialctl.exe interactive --pipe SerialBroker.COM7
+
+# 查看版本
+.\serialctl.exe --version
+</code></pre>
+<p><code>--cr</code>追加0D，<code>--lf</code>追加0A，同时指定为CRLF。<code>--hex</code>接受成对十六进制数字和空白。每次发送（包括追加换行）最多4096字节；<code>--timeout 10000</code>设置权限/确认等待为10000毫秒。</p>
+<p>GUI切换标签不影响CLI的目标，目标只由管道参数决定。stdout是设备RX，stderr是状态/错误，不要把两者合并后当作原始二进制数据保存。</p>
+<p>新客户端会先收到最多64KiB的近期RX，再收到实时输出；因此连接后看到的内容未必是刚发命令的结果。<code>written</code>确认只表示Windows串口写操作完成，不代表设备已经执行完命令。超时、断开或确认丢失时字节可能部分/全部已发出，先查看设备输出，不要自动重发。</p>
+<p>帧格式、权限申请和退出码详见同目录 <code>PROTOCOL.md</code>。V2没有改变SB协议，也没有提供一个含糊地指向“当前标签”的全局发送管道。</p>
+<h2>6. 写入策略和客户端</h2>
+<p>每次连接默认为共享写入。通过当前标签的策略下拉框切换：</p>
+<table>
+<thead>
+<tr>
+<th>策略</th>
+<th>行为</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>共享写入</td>
+<td>所有在线客户端可以发送，数据块由该设备唯一TX线程依次写入。不同客户端的整条shell命令仍可能交错。</td>
+</tr>
+<tr>
+<td>单写入者</td>
+<td>第一个发送有效数据或申请租约的客户端取得写入权；释放、断开或策略切换后可由其它客户端取得。</td>
+</tr>
+<tr>
+<td>全部只读</td>
+<td>拒绝发送及租约申请，仍可接收设备输出。</td>
+</tr>
+</tbody>
+</table>
+<p>切换策略会清除旧租约并使旧策略下尚未开始的排队请求失效；已经交给Windows驱动的字节无法撤回。重复选中同一策略不会主动撤销租约。</p>
+<p>选中客户端后点“断开选中客户端”，只关闭对应Telnet或管道客户端，不停止物理设备代理，也不影响其它串口。</p>
+<h2>7. 监视、主题和日志</h2>
+<p>监视区包含时间、事件/RX/TX方向及内容。默认按字节转义控制和非ASCII字符，例如CR为 <code>\r</code>；HEX查看每个原始字节。它是数据监视器，不是ANSI终端模拟器，完整终端呈现交给连接的终端软件。</p>
+<ul>
+<li>暂停显示：暂停记录新的RX/TX显示项，仍显示状态事件；转发和磁盘日志继续，恢复后不补放暂停期间的监视项。</li>
+<li>清空：清空当前标签的显示历史，不清除设备字节计数、磁盘文件或其它标签。</li>
+<li>外观：明亮、暗色、暖色、淡蓝四种全局主题，立即同步到所有标签及监视区，并记住选择。</li>
+<li>日志“打开”：打开文本框指定的根目录；目录不存在会尝试创建，路径错误显示在状态区。</li>
+</ul>
+<p>监视队列最大约512KiB/2048项，显示历史最多2000项及约1MiB字节成本；达到限制仅略过/裁剪显示，避免阻塞设备转发。日志独立保存设备原始数据。</p>
+<p>每次连接创建含时间、COM和进程ID的会话目录：</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>rx.bin</td>
+<td>设备原始接收字节</td>
+</tr>
+<tr>
+<td>tx.bin</td>
+<td>完整成功写入的块；部分失败块不计入此文件</td>
+</tr>
+<tr>
+<td>events.log</td>
+<td>时间、连接/策略、方向、字节数和二进制偏移</td>
+</tr>
+</tbody>
+</table>
+<p>RX/TX各上限128MiB，事件日志上限8MiB。达到限制或发生写盘错误后停止该会话全部日志并提示LOGGING DISABLED，串口转发继续。旧目录由用户管理，不自动轮转/删除。</p>
+<h2>8. 关闭、托盘与退出</h2>
+<p>点主窗口关闭或Alt+F4会隐藏到托盘，不断开任何设备。单击托盘图标恢复同一工作区；右键菜单可显示、打开帮助或退出。</p>
+<p>需要真正停止程序时，使用主界面顶部或托盘菜单的“退出程序”。退出等待全部连接停止、I/O和回调结束，再关闭窗口和托盘。关闭单个标签只释放对应设备。</p>
+<p>窗口尺寸、位置、最大化和主题会保存。重新启动恢复窗口偏好和历史，但不自动连接任何设备。关闭窗口前若还有手动操作，应先观察设备状态，代理不判断板端命令是否已经执行完。</p>
+<h2>9. 故障处理与人工验收</h2>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>检查</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GUI提示缺少运行时</td>
+<td>安装.NET8 Desktop Runtime Windows x64，保留完整解压目录</td>
+</tr>
+<tr>
+<td>无法打开COM</td>
+<td>设备是否在线；旧串口软件/旧代理是否占用；COM号是否变化</td>
+</tr>
+<tr>
+<td>Telnet绑定失败</td>
+<td>端口是否被其他标签或进程占用；手动换端口再连接</td>
+</tr>
+<tr>
+<td>CLI连不上</td>
+<td>目标标签是否已连接；是否显式指定正确COM管道；是否使用当前Windows用户</td>
+</tr>
+<tr>
+<td>设备没有TX回显</td>
+<td>核对监视TX和实际设备RX，不将写确认误当作板端执行结果</td>
+</tr>
+<tr>
+<td>一个设备断开</td>
+<td>检查该板连接后手动重连；其它标签无需断开</td>
+</tr>
+<tr>
+<td>只看到托盘、窗口没了</td>
+<td>单击托盘恢复；关闭窗口本来不会退出</td>
+</tr>
+<tr>
+<td>历史/布局未保存</td>
+<td>检查偏好目录写入权限和状态栏错误；独立实例使用不同数据目录</td>
+</tr>
+</tbody>
+</table>
+<p>首次用于实际设备前，请重点用两个真实串口检查独立终端/CLI、单设备拔插、DTR/RTS、关闭驻留和显式退出。当前70项自动检查使用模拟设备、名称测试数据及正式库边界测试；另做本机设备元数据只读核对，不代表所有真实驱动、USB热插拔和长时间高吞吐均已覆盖。</p></body></html>

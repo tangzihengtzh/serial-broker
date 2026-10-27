@@ -1,0 +1,28 @@
+<Window x:Class="SerialBroker.Gui.WorkspaceWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:ui="http://schemas.modernwpf.com/2019"
+ Title="Serial Broker · 多串口工作区" Icon="Assets/SerialBroker.ico" Width="1380" Height="920" MinWidth="1080" MinHeight="720" FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="13" Background="{DynamicResource CanvasBrush}" Foreground="{DynamicResource InkBrush}" UseLayoutRounding="True" SnapsToDevicePixels="True" ui:WindowHelper.UseModernWindowStyle="True">
+ <Grid Margin="24,12,24,16" Background="{DynamicResource CanvasBrush}" TextElement.Foreground="{DynamicResource InkBrush}">
+  <Grid.RowDefinitions><RowDefinition Height="60"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <Grid Margin="0,0,0,16">
+   <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Image Source="Assets/SerialBroker.png" Width="36" Height="36" Margin="0,0,12,0"/><TextBlock Text="Serial Broker" FontSize="21" FontWeight="SemiBold" VerticalAlignment="Center"/><Border Background="{DynamicResource SoftBrush}" CornerRadius="5" Padding="8,3" Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Text="V2 · WORKSPACE" FontSize="10" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"/></Border></StackPanel>
+   <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"><Button Content="帮助" Style="{StaticResource QuietButton}" Click="HelpClick" Margin="0,0,12,0"/><Button Content="退出程序" Style="{StaticResource QuietButton}" Click="ExitClick" Margin="0,0,16,0"/><TextBlock Text="外观" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/><ComboBox x:Name="ThemeBox" Width="110" SelectedValuePath="Tag" SelectionChanged="ThemeChanged"><ComboBoxItem Content="明亮" Tag="Light"/><ComboBoxItem Content="暗色" Tag="Dark"/><ComboBoxItem Content="暖色" Tag="Warm"/><ComboBoxItem Content="淡蓝" Tag="Blue"/></ComboBox></StackPanel>
+  </Grid>
+  <TabControl x:Name="SessionTabs" Grid.Row="1">
+   <TabItem x:Name="WelcomeTab">
+    <TabItem.Header><Button Content="＋ 新建连接" Click="NewClick" MinHeight="24" Padding="0" Style="{StaticResource QuietButton}"/></TabItem.Header>
+    <Border Style="{StaticResource Card}" Padding="48" MaxWidth="800" HorizontalAlignment="Center" VerticalAlignment="Center">
+     <StackPanel><Image Source="Assets/SerialBroker.png" Width="64" Height="64" HorizontalAlignment="Left" Margin="0,0,0,24"/>
+      <TextBlock Text="把设备连接在一起" FontSize="32" FontWeight="SemiBold"/>
+      <TextBlock Text="多个串口，一个工作区。随时切换，彼此独立。" FontSize="15" Foreground="{DynamicResource MutedBrush}" Margin="0,12,0,32"/>
+      <Grid Margin="0,0,0,30"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+       <Border Background="{DynamicResource SoftBrush}" CornerRadius="10" Padding="18"><StackPanel><TextBlock Text="每台设备，各自有序" FontWeight="SemiBold"/><TextBlock Text="独立连接、状态和日志，切换标签不中断其它设备。" TextWrapping="Wrap" LineHeight="21" Foreground="{DynamicResource MutedBrush}" Margin="0,8,0,0"/></StackPanel></Border>
+       <Border Grid.Column="2" Background="{DynamicResource SoftBrush}" CornerRadius="10" Padding="18"><StackPanel><TextBlock Text="熟悉的设备，一次选好" FontWeight="SemiBold"/><TextBlock Text="记住串口配置与设备备注，下次选择后即可连接。" TextWrapping="Wrap" LineHeight="21" Foreground="{DynamicResource MutedBrush}" Margin="0,8,0,0"/></StackPanel></Border>
+      </Grid>
+      <Button Content="＋  新建串口连接" Click="NewClick" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Height="44" Padding="22,8"/>
+      <TextBlock x:Name="HistoryHint" Foreground="{DynamicResource MutedBrush}" Margin="0,22,0,0"/>
+     </StackPanel>
+    </Border>
+   </TabItem>
+  </TabControl>
+  <TextBlock x:Name="WorkspaceStatus" Grid.Row="2" Margin="4,12,0,0" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextTrimming="CharacterEllipsis"/>
+ </Grid>
+</Window>

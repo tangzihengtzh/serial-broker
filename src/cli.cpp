@@ -156,6 +156,7 @@ struct Client {
 };
 }
 int wmain(int argc, wchar_t** argv) {
+    if (argc == 2 && std::wstring(argv[1]) == L"--version") { std::cout << "serialctl 2.0.0\n"; return 0; }
     if (argc == 2 && (std::wstring(argv[1]) == L"--help" || std::wstring(argv[1]) == L"-h")) { usage(); return 0; }
     try {
         const auto args = parse(argc,argv);
