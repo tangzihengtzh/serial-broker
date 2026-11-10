@@ -20,13 +20,16 @@ public partial class SessionView : UserControl
     private readonly Queue<MonitorEntry> _history = new();
     private readonly ObservableCollection<MonitorLine> _rows = [];
     private IReadOnlyList<PortInfo> _ports = [];
+    private PortInfo? _displayedPort;
     private int _historyBytes;
     private bool _loading = true, _telnetEdited, _busy, _started, _closing;
     private string _lastPort = "";
     private Task _operation = Task.CompletedTask;
     private Task? _closeTask;
     public event Action? TitleChanged;
-    internal string CurrentPort { get { try { return PortCatalog.ResolvePort(PortBox.Text, _ports); } catch (ArgumentException) { return PortBox.Text; } } }
+    private string ResolvePort(string value) => _displayedPort is { } displayed && string.Equals(value, displayed.DisplayName, StringComparison.OrdinalIgnoreCase)
+        ? displayed.Port : PortCatalog.ResolvePort(value, _ports);
+    internal string CurrentPort { get { try { return ResolvePort(PortBox.Text); } catch (ArgumentException) { return PortBox.Text; } } }
     public string Title => string.IsNullOrWhiteSpace(NameBox.Text) ? (string.IsNullOrWhiteSpace(PortBox.Text) ? "新串口" : CurrentPort) : $"{NameBox.Text.Trim()} · {CurrentPort}";
     public bool IsRunning { get; private set; }
     internal Snapshot Snapshot => _native.GetSnapshot();
@@ -69,7 +72,7 @@ public partial class SessionView : UserControl
         _lastPort = profile.Port; _telnetEdited = false; _loading = previous;
         TitleChanged?.Invoke();
     }
-    private void RefreshPorts()
+    internal void RefreshPorts()
     {
         bool previous = _loading; _loading = true;
         string text = CurrentPort;
@@ -80,7 +83,9 @@ public partial class SessionView : UserControl
     private void ShowPort(string value)
     {
         bool previous = _loading; _loading = true;
-        var item = _ports.FirstOrDefault(x => x.Port == value);
+        // 清除历史后保留当前标签的显示身份，但不把已清除的设备放回下拉候选。
+        var item = _ports.FirstOrDefault(x => x.Port == value) ?? (_displayedPort?.Port == value ? _displayedPort : null);
+        _displayedPort = item;
         PortBox.SelectedItem = item;
         PortBox.Text = item?.DisplayName ?? value;
         PortDetails.Text = item?.DisplayName ?? "";
@@ -99,7 +104,7 @@ public partial class SessionView : UserControl
     {
         if (_busy || IsRunning) return;
         string normalized;
-        try { normalized = PortCatalog.ResolvePort(value, _ports); } catch (ArgumentException) { PortDetails.Text = ""; TitleChanged?.Invoke(); return; }
+        try { normalized = ResolvePort(value); } catch (ArgumentException) { PortDetails.Text = ""; TitleChanged?.Invoke(); return; }
         var item = _ports.FirstOrDefault(x => x.Port == normalized);
         PortDetails.Text = item?.DisplayName ?? "";
         if (normalized == _lastPort) { if (showDisplay) ShowPort(normalized); TitleChanged?.Invoke(); return; }
@@ -119,8 +124,8 @@ public partial class SessionView : UserControl
     {
         if (!uint.TryParse(BaudBox.Text, out uint baud)) throw new ArgumentException("请输入有效波特率");
         if (!int.TryParse(TelnetBox.Text, out int tcp)) throw new ArgumentException("请输入有效Telnet端口");
-        string port = PortCatalog.ResolvePort(PortBox.Text, _ports);
-        var value = new ConnectionProfile { Port = port, DeviceName = _ports.FirstOrDefault(x => x.Port == port)?.DeviceName ?? "", Name = NameBox.Text, Baud = baud, TelnetPort = tcp,
+        string port = ResolvePort(PortBox.Text);
+        var value = new ConnectionProfile { Port = port, DeviceName = _ports.FirstOrDefault(x => x.Port == port)?.DeviceName ?? (_displayedPort?.Port == port ? _displayedPort.DeviceName : ""), Name = NameBox.Text, Baud = baud, TelnetPort = tcp,
             TelnetEnabled = TelnetEnabledBox.IsChecked == true, Dtr = DtrBox.IsChecked == true, Rts = RtsBox.IsChecked == true, LogRoot = LogBox.Text };
         value.Validate(); return value;
     }

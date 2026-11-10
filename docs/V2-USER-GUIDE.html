@@ -1,7 +1,7 @@
-<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Serial Broker V2.0.0 使用指南</title><style>body{font:16px/1.7 'Segoe UI','Microsoft YaHei UI',sans-serif;max-width:960px;margin:40px auto;padding:0 24px;color:#253447;background:#f5f7fb}h1,h2{line-height:1.3;color:#226b80}h2{margin-top:40px}pre,table{background:#fff;border:1px solid #dce4ec;border-radius:10px}pre{padding:16px;overflow:auto}code{font-family:Consolas,monospace;font-size:.92em}table{border-collapse:collapse;width:100%}th,td{padding:10px;border:1px solid #dce4ec;text-align:left}a{color:#226b80}@media(prefers-color-scheme:dark){body{background:#171b24;color:#e7ecf5}pre,table{background:#212735;border-color:#364156}td,th{border-color:#364156}h1,h2,a{color:#8dd1e0}}</style><body><h1>Serial Broker V2.0.0 使用指南</h1>
-<p>这是V2.0.0正式版使用说明。main跟随最新版，旧版本源码归档为V1.0.0；请将新版解压到新目录，保留已有安装。</p>
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Serial Broker V2.0.1 使用指南</title><style>body{font:16px/1.7 'Segoe UI','Microsoft YaHei UI',sans-serif;max-width:960px;margin:40px auto;padding:0 24px;color:#253447;background:#f5f7fb}h1,h2{line-height:1.3;color:#226b80}h2{margin-top:40px}pre,table{background:#fff;border:1px solid #dce4ec;border-radius:10px}pre{padding:16px;overflow:auto}code{font-family:Consolas,monospace;font-size:.92em}table{border-collapse:collapse;width:100%}th,td{padding:10px;border:1px solid #dce4ec;text-align:left}a{color:#226b80}@media(prefers-color-scheme:dark){body{background:#171b24;color:#e7ecf5}pre,table{background:#212735;border-color:#364156}td,th{border-color:#364156}h1,h2,a{color:#8dd1e0}}</style><body><h1>Serial Broker V2.0.1 使用指南</h1>
+<p>这是V2.0.1正式版使用说明。main跟随最新版，旧版本源码归档为V1.0.0；请将新版解压到新目录，保留已有安装。</p>
 <h2>1. 安装与启动</h2>
-<p>解压 <code>SerialBroker-V2.0.0-win-x64.zip</code> 到新的目录，保留完整内容。需要Windows10/11 x64和.NET8 Desktop Runtime（Windows x64）；不是仅安装ASP.NET或普通.NET控制台运行时。</p>
+<p>解压 <code>SerialBroker-V2.0.1-win-x64.zip</code> 到新的目录，保留完整内容。需要Windows10/11 x64和.NET8 Desktop Runtime（Windows x64）；不是仅安装ASP.NET或普通.NET控制台运行时。</p>
 <ul>
 <li><code>SerialBroker.exe</code>：多串口桌面工作区。</li>
 <li><code>SerialBroker.Native.dll</code>：原C++串口核心的实例化桥接。</li>
@@ -9,7 +9,10 @@
 <li>其它DLL/JSON：GUI运行依赖，不能只复制EXE。</li>
 <li><code>docs/V2-USER-GUIDE.html</code>：可由程序“帮助”按钮离线打开的本说明。</li>
 </ul>
-<p>程序通常不需要管理员权限；当前用户需能访问对应设备和日志路径。启动后显示欢迎页，不会自动连接历史设备，也不会重放旧命令。</p>
+<p>程序通常不需要管理员权限；当前用户需能访问对应设备和日志路径。手动启动后显示欢迎页，不会自动连接历史设备，也不会重放旧命令。</p>
+<h3>开机自启动到托盘</h3>
+<p>点击顶部“设置”，勾选“开机自启动到托盘”即可启用；取消勾选即可关闭。设置作用于当前Windows用户，无需管理员权限，随用户登录生效。自动启动时只显示通知区域的托盘图标，点击图标或托盘菜单“显示窗口”恢复工作区；不会自动连接设备。手动双击程序仍正常显示主窗口。</p>
+<p>启动项记住当前程序位置和数据目录（包括通过<code>--data-directory</code>指定的目录），不依赖Windows登录时的工作目录。请保留整个程序目录；移动目录后从新位置重新勾选。同一Windows用户只保留一个SerialBroker启动入口，最后一次启用的位置和工作区生效。设置菜单从实际启动项读取状态；读写失败会在底部状态栏提示，保存失败恢复原勾选状态。清除连接历史不影响自启动设置。</p>
 <h2>2. 新建多个串口连接</h2>
 <p>顶部“＋新建连接”或欢迎页按钮创建标签。每个标签对应一个物理COM，设置、状态、客户端、写入策略、监视和日志彼此独立。</p>
 <ol>
@@ -26,6 +29,8 @@
 <p>有效配置在点击连接并通过参数校验时保存，即使之后设备不存在或端口绑定失败，也会记住该配置，便于修正后重试。仅仅创建草稿不会保存一条活动连接。</p>
 <p>历史按规范化COM号（如com004统一为COM4）去重，最近使用在前，最多200项。保存：COM、Windows设备友好名称、波特率、用户备注、Telnet端口/开关、DTR/RTS和日志根目录。不会保存活动连接、RX/TX内容或CLI输入。设备友好名称只供识别，实际打开设备和生成管道时始终使用COM号；驱动未提供名称时退回COM号，旧历史不含名称也可继续使用。在场设备的最新名称优先，不会用旧缓存冒充当前适配器。</p>
 <p>选择历史后回填之前的参数。历史Telnet端口只是默认值，可能已经被其它进程占用，用户可改。新设备端口从7000起，避开历史、当前工作区其它草稿和系统监听端口。用户手动输入端口后，不因继续输入新COM而自动覆盖。建议不会提前预留端口，连接前仍可能被其它进程抢占。</p>
+<p>需要整理累积的设备记录时，点击“设置 → 清除历史连接”。确认框会显示历史条数，默认取消；确认后一次清除全部已保存的连接配置并立即保存，所有已打开标签的串口下拉会同步移除历史候选。当前系统仍在场的串口继续显示，当前标签的设备名称、已填写参数及活动连接均保留；监视内容、设备日志、主题及窗口布局不受影响。历史为空时按钮禁用。</p>
+<p>清除后退出或重启不会恢复旧记录；再次点击“连接设备”时会重新记录该配置。保存失败时保留原历史，在底部状态栏显示错误，修复偏好目录写入问题后可以重试。</p>
 <p>默认偏好位置：<code>%LOCALAPPDATA%\SerialBroker\workspace\preferences.json</code>。窗口尺寸/位置记录在同目录 <code>window.json</code>。可为独立工作区指定目录：</p>
 <pre><code class="language-powershell">.\SerialBroker.exe --data-directory &quot;D:\SerialWorkspace\preferences&quot;
 </code></pre>

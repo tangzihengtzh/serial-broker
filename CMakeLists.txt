@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(SerialBroker VERSION 2.0.0 LANGUAGES CXX RC)
+project(SerialBroker VERSION 2.0.1 LANGUAGES CXX RC)
 if(NOT WIN32 OR NOT MSVC)
   message(FATAL_ERROR "SerialBroker currently requires Windows and MSVC")
 endif()

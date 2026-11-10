@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using SerialBroker.Core;
 using SerialBroker.Gui;
 
@@ -36,7 +37,7 @@ internal static class Program
             try
             {
                 if (production) await Production();
-                else { Models(); await Native(); await Ui(); }
+                else { Models(); await Native(); await Ui(); await HistoryClearUi(); await StartupUi(); }
                 Console.WriteLine($"PASS {Passed.Count} checks; no physical serial devices used.");
             }
             catch (Exception ex) { _exit = 1; Console.Error.WriteLine(ex); }
@@ -262,6 +263,175 @@ internal static class Program
         }
         finally { await window.ExitAsync(false); }
     }
+    private static async Task HistoryClearUi()
+    {
+        string state = Path.Combine(_run, "clear-history");
+        var window = new WorkspaceWindow(state) { ShowActivated = false, ShowInTaskbar = false, Left = -20000, Top = -20000 };
+        window.Show(); await Task.Delay(100);
+        try
+        {
+            Check(!window.ClearHistoryMenuItem.IsEnabled, "Clear-history menu item is disabled for empty history");
+            window.SettingsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.SettingsButton.ContextMenu.IsOpen && window.SettingsButton.ContextMenu.Items.Contains(window.ClearHistoryMenuItem)
+                && window.SettingsButton.ContextMenu.Items.Contains(window.AutoStartMenuItem), "Settings dropdown contains both connection history and startup options");
+            window.SettingsButton.ContextMenu.IsOpen = false;
+            await using var device = new Device();
+            var profile = Profile(62041, "保留在线连接 🧭") with { DeviceName = "USB-SERIAL CH340 (COM62041)" };
+            var live = window.AddSession(profile); await live.ConnectAsync(profile, device.Path);
+            var offline = Profile(62042, "旧设备") with { DeviceName = "Old adapter (COM62042)" };
+            window.Preferences.Remember(offline); window.SavePreferences();
+            var draft = window.AddSession(offline);
+            draft.NameBox.Text = "尚未保存的备注"; draft.BaudBox.Text = "921600";
+            draft.DtrBox.IsChecked = true; draft.RtsBox.IsChecked = true;
+            draft.TelnetBox.Text = NetworkFixture.FreePort().ToString();
+            var beforeDraft = draft.ReadProfile();
+            window.ThemeBox.SelectedValue = "Warm";
+            int confirmations = 0;
+            window.ConfirmHistoryClear = () => { confirmations++; return false; };
+            window.ClearHistoryMenuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Check(confirmations == 1 && window.Preferences.History.Count == 2 && new PreferenceStore(state).Load().History.Count == 2,
+                "Cancel via actual clear-history menu item leaves memory and disk unchanged");
+            Check(draft.PortBox.Items.Cast<PortInfo>().Any(x => x.Port == profile.Port), "Cancel keeps historical dropdown candidates");
+            window.Width = window.MinWidth; window.Height = window.MinHeight;
+            Capture(window, "clear-history-minimum-Warm");
+            using var tcp = new TcpClient(); await tcp.ConnectAsync("127.0.0.1", profile.TelnetPort);
+            await device.Send("before-history-clear\r\n");
+            await Wait(() => live.MonitorBox.Items.Cast<MonitorLine>().Any(x => x.Text.Contains("before-history-clear")), "Initial monitor output absent");
+            window.ConfirmHistoryClear = () => { confirmations++; return true; };
+            window.ClearHistoryMenuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Check(confirmations == 2 && window.Preferences.History.Count == 0 && new PreferenceStore(state).Load().History.Count == 0,
+                "Confirm via actual menu item clears history immediately in memory and on disk");
+            Check(!window.ClearHistoryMenuItem.IsEnabled && window.HistoryHint.Text == "从新连接开始。", "Clear updates menu item and welcome history summary");
+            Check(window.Sessions.All(x => !x.PortBox.Items.Cast<PortInfo>().Any(p => p.Port == offline.Port)), "Clear refreshes offline history candidates in every open tab");
+            var presentPorts = PortCatalog.Enumerate([]).Select(x => x.Port);
+            Check(presentPorts.All(p => draft.PortBox.Items.Cast<PortInfo>().Any(x => x.Port == p)), "Clearing history retains currently enumerated system ports");
+            Check(draft.ReadProfile() == beforeDraft && draft.PortBox.Text.Contains(offline.DeviceName), "Clear preserves draft device name, COM and every editable setting");
+            Check(live.IsRunning && live.CurrentPort == profile.Port && live.NameBox.Text == profile.Name, "Clear preserves active session identity and connection");
+            Check(live.PortBox.Text == profile.DeviceName, "Clear preserves the active device friendly name outside historical dropdown candidates");
+            Check(live.MonitorBox.Items.Cast<MonitorLine>().Any(x => x.Text.Contains("before-history-clear")), "Clear connection history retains monitor content");
+            await tcp.GetStream().WriteAsync(Encoding.UTF8.GetBytes("tx-after-clear\r"));
+            await Wait(() => device.Received.Contains("tx-after-clear"), "TX stopped after history clear");
+            await device.Send("rx-after-clear\r\n");
+            await Wait(() => live.MonitorBox.Items.Cast<MonitorLine>().Any(x => x.Text.Contains("rx-after-clear")), "RX stopped after history clear");
+            Check(live.Snapshot.Running, "Telnet TX and device RX continue after clearing history");
+            var fresh = window.AddSession(new ConnectionProfile { Port = "COM62043", TelnetPort = NetworkFixture.FreePort() });
+            fresh.PortBox.Text = offline.Port;
+            Check(fresh.NameBox.Text == "" && fresh.ReadProfile().DeviceName == "", "A new tab cannot refill a cleared device profile");
+            Check(window.ClearConnectionHistory(), "Clearing empty history is harmless");
+            window.ThemeBox.SelectedValue = "Blue";
+            await window.ExitAsync(false);
+            var restored = new PreferenceStore(state).Load();
+            Check(restored.History.Count == 0 && restored.Theme == "Blue", "Theme save and exit do not resurrect cleared history");
+            var reopened = new WorkspaceWindow(state) { ShowActivated = false, ShowInTaskbar = false, Left = -20000, Top = -20000 };
+            reopened.Show();
+            try
+            {
+                Check(reopened.Preferences.History.Count == 0 && reopened.Sessions.Count == 0 && !reopened.ClearHistoryMenuItem.IsEnabled,
+                    "Restart keeps cleared history empty without auto-connecting");
+                await using var nextDevice = new Device();
+                var next = reopened.AddSession(profile); await next.ConnectAsync(profile, nextDevice.Path);
+                Check(next.IsRunning, "New mock device connects after restart");
+                Check(reopened.Preferences.History.Count == 1 && reopened.ClearHistoryMenuItem.IsEnabled, "A new connection can be remembered after clearing history");
+                // A directory at the temporary-file path deterministically makes Save fail, even with administrator privileges.
+                Directory.CreateDirectory(Path.Combine(state, "preferences.json.tmp"));
+                reopened.ConfirmHistoryClear = () => true;
+                reopened.ClearHistoryMenuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                Check(reopened.Preferences.History.Count == 1 && new PreferenceStore(state).Load().History.Count == 1,
+                    "Failed clear restores original in-memory history and preserves saved history");
+                Check(reopened.WorkspaceStatus.Text.Contains("偏好设置未能保存") && reopened.ClearHistoryMenuItem.IsEnabled,
+                    "Failed clear reports persistence error and leaves retry available");
+                Check(next.IsRunning, "Failed clear does not interrupt active session");
+                Directory.Delete(Path.Combine(state, "preferences.json.tmp"));
+                reopened.ClearHistoryMenuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                Check(reopened.Preferences.History.Count == 0 && !reopened.WorkspaceStatus.Text.Contains("偏好设置未能保存"), "Clear succeeds on retry and removes the stale save error");
+                Capture(reopened, "clear-history-Blue");
+            }
+            finally { await reopened.ExitAsync(false); }
+        }
+        finally { await window.ExitAsync(false); }
+    }
+    private static async Task StartupUi()
+    {
+        string state = Path.Combine(_run, "启动设置 with spaces");
+        string registryPath = @"Software\SerialBroker.Tests\Startup-" + Guid.NewGuid().ToString("N");
+        string exe = @"C:\Serial Broker 测试\SerialBroker.exe";
+        var startup = new StartupRegistration(exe, state, registryPath);
+        try
+        {
+            Check(!startup.IsEnabled, "Startup is opt-in when no registration exists");
+            Check(startup.CommandLine == $"\"{exe}\" --start-in-tray --data-directory \"{state}\"", "Startup command quotes executable and data directory with spaces and Unicode");
+            var rootStartup = new StartupRegistration(exe, @"C:\", registryPath);
+            Check(rootStartup.CommandLine.EndsWith("\"C:\\\\\""), "Startup command correctly escapes root-directory trailing backslash");
+            var options = App.ParseArguments(["--start-in-tray", "--data-directory", state]);
+            Check(options.StartInTray && options.DataDirectory == state, "Startup parser retains tray mode and the selected workspace");
+            Check(App.ParseArguments(["--data-directory", state, "--start-in-tray"]) == options, "Startup options work in either order");
+            Check(!App.ParseArguments([]).StartInTray && !App.ParseArguments(["--data-directory", state]).StartInTray,
+                "Normal launches keep showing the main window by default");
+            foreach (string[] invalid in new[] { new[] { "--unknown" }, new[] { "--data-directory" }, new[] { "--data-directory", "--start-in-tray" },
+                new[] { "--start-in-tray", "--start-in-tray" }, new[] { "--data-directory", state, "--data-directory", state } })
+            {
+                bool rejected = false; try { App.ParseArguments(invalid); } catch (ArgumentException) { rejected = true; }
+                Check(rejected, "Invalid startup arguments rejected: " + string.Join(" ", invalid));
+            }
+            WindowPlacementStore.Save(state, new(1260, 850, 100, 120, true));
+            var originalPlacement = WindowPlacementStore.Load(state);
+            var window = new WorkspaceWindow(state, startup) { ShowActivated = false, ShowInTaskbar = false };
+            try
+            {
+                window.Start(true);
+                Check(!window.IsVisible && !window.IsLoaded && PresentationSource.FromVisual(window) == null && window.Sessions.Count == 0,
+                    "Tray startup creates no visible main window or active connections");
+                Check(!window.AutoStartMenuItem.IsChecked, "Settings menu initially reflects disabled startup");
+                window.AutoStartMenuItem.IsChecked = true;
+                window.AutoStartMenuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                Check(new StartupRegistration(exe, state, registryPath).IsEnabled, "Checking the actual settings item persists startup registration");
+                using (var key = Registry.CurrentUser.OpenSubKey(registryPath))
+                    Check((string?)key?.GetValue("SerialBroker") == startup.CommandLine, "Persisted Run command starts the correct executable and workspace in tray mode");
+                await window.ExitAsync(false);
+                Check(WindowPlacementStore.Load(state) == originalPlacement, "Exiting before showing a tray-started window preserves valid saved geometry");
+            }
+            finally { await window.ExitAsync(false); }
+
+            var failure = new StartupFailureFixture(startup);
+            var reopened = new WorkspaceWindow(state, failure) { ShowActivated = false, ShowInTaskbar = false, WindowState = WindowState.Normal, Left = -20000, Top = -20000 };
+            try
+            {
+                Check(reopened.AutoStartMenuItem.IsChecked, "Reopened workspace reads enabled startup from the registry");
+                reopened.Start(false);
+                Check(reopened.IsVisible, "A normal manual launch still opens the window when autostart is enabled");
+                reopened.Hide(); reopened.ShowFromTray();
+                Check(reopened.IsVisible && reopened.Sessions.Count == 0, "Tray restore opens the same workspace without auto-connecting");
+                reopened.Width = reopened.MinWidth; reopened.Height = reopened.MinHeight;
+                reopened.SettingsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(reopened.SettingsButton.ContextMenu.IsOpen && reopened.AutoStartMenuItem.IsCheckable, "Settings button opens a checkable startup option");
+                reopened.SettingsButton.ContextMenu.IsOpen = false;
+                Capture(reopened, "startup-settings-minimum");
+                failure.FailWrite = true;
+                reopened.AutoStartMenuItem.IsChecked = false;
+                reopened.AutoStartMenuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                Check(reopened.AutoStartMenuItem.IsChecked && startup.IsEnabled && reopened.WorkspaceStatus.Text.Contains("自启动设置未能保存"),
+                    "Failed startup write restores actual check state and reports the error");
+                failure.FailWrite = false;
+                reopened.AutoStartMenuItem.IsChecked = false;
+                reopened.AutoStartMenuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                Check(!startup.IsEnabled && !reopened.WorkspaceStatus.Text.Contains("自启动设置未能保存"), "Unchecking removes startup registration and clears previous errors");
+                using (var key = Registry.CurrentUser.OpenSubKey(registryPath, true)) key!.SetValue("OtherApp", "untouched");
+                startup.SetEnabled(false);
+                using (var key = Registry.CurrentUser.OpenSubKey(registryPath))
+                    Check((string?)key?.GetValue("OtherApp") == "untouched", "Disabling startup is idempotent and retains unrelated registry values");
+                startup.SetEnabled(true); reopened.RefreshStartupSetting();
+                Check(reopened.AutoStartMenuItem.IsChecked, "Settings refresh reflects externally changed startup registration");
+                reopened.Preferences.Remember(Profile(62051, "startup-history")); reopened.SavePreferences();
+                Check(reopened.ClearConnectionHistory() && startup.IsEnabled, "Clearing connection history retains startup registration");
+                failure.FailRead = true; reopened.RefreshStartupSetting();
+                Check(!reopened.AutoStartMenuItem.IsEnabled && reopened.WorkspaceStatus.Text.Contains("自启动设置未能读取"), "Unreadable startup registration disables the option and reports the error");
+                failure.FailRead = false; reopened.RefreshStartupSetting();
+                Check(reopened.AutoStartMenuItem.IsEnabled && !reopened.WorkspaceStatus.Text.Contains("自启动设置未能读取"), "Startup setting recovers after read access is restored");
+            }
+            finally { await reopened.ExitAsync(false); }
+        }
+        finally { Registry.CurrentUser.DeleteSubKeyTree(registryPath, false); }
+    }
     private static void Capture(Window window, string name)
     {
         window.UpdateLayout();
@@ -282,6 +452,9 @@ internal static class Program
         catch (InvalidOperationException ex) { rejected = ex.Message.Contains("disabled in production"); }
         Check(rejected && !session.GetSnapshot().Running, "Shipped native library rejects simulated transport before any COM access");
         var result = await Cli("--help"); Check(result.Code == 0, "Shipped serialctl executable starts and documents compatible commands");
-        result = await Cli("--version"); Check(result.Code == 0 && result.Output.Contains("2.0.0"), "Shipped CLI reports V2.0.0");
+        result = await Cli("--version"); Check(result.Code == 0 && result.Output.Contains("2.0.1"), "Shipped CLI reports V2.0.1");
+        Check(typeof(WorkspaceWindow).Assembly.GetName().Version == new Version(2, 0, 1, 0), "Shipped GUI assembly reports V2.0.1");
+        foreach (string file in new[] { "SerialBroker.Native.dll", "serialctl.exe" })
+            Check(FileVersionInfo.GetVersionInfo(Path.Combine(_root, "artifacts", "app", file)).ProductVersion == "2.0.1", $"Shipped {file} metadata reports V2.0.1");
     }
 }

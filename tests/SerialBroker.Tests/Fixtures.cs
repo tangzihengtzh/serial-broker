@@ -4,8 +4,21 @@ using System.IO.Pipes;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using SerialBroker.Gui;
 
 namespace SerialBroker.Tests;
+
+internal sealed class StartupFailureFixture(IStartupRegistration inner) : IStartupRegistration
+{
+    public bool FailRead { get; set; }
+    public bool FailWrite { get; set; }
+    public bool IsEnabled => FailRead ? throw new UnauthorizedAccessException("Test registry read denied") : inner.IsEnabled;
+    public void SetEnabled(bool enabled)
+    {
+        if (FailWrite) throw new UnauthorizedAccessException("Test registry write denied");
+        inner.SetEnabled(enabled);
+    }
+}
 
 // 所有测试设备都是当前进程创建的命名管道；没有COM驱动调用或真实开发板。
 internal sealed class Device : IAsyncDisposable

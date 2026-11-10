@@ -8,6 +8,10 @@
 
 历史在配置应用时按规范化COM保存，最多200项；主题及窗口几何持久化，不序列化活动连接或监视数据。端口建议不是端口预留，实际绑定失败只影响尝试连接的标签。
 
+WorkspaceWindow提供全局“清除历史连接”：确认后用空History保存，失败恢复原列表并显示保存错误；成功后刷新全部SessionView的端口候选，不重新加载配置或操作NativeSession。当前标签单独保留已显示设备的COM/名称映射，使清除候选后仍能显示和读取原设备身份，但不把它重新加入历史下拉；新的连接操作才会再次Remember。主题、窗口、监视内容和设备日志不随连接历史删除。
+
+StartupRegistration封装`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`中的`SerialBroker`值，包含加引号的实际EXE、`--start-in-tray`和`--data-directory`。设置菜单读取并比较实际命令，不在preferences.json另存可能失配的布尔值；取消勾选只删除该应用的值，失败重新读取实际状态并显示错误。自启动作用于当前Windows用户，同一用户只有一个SerialBroker启动入口，最后一次启用的程序及数据目录生效。App解析启动参数后创建既有TrayHost，托盘启动不Show窗口；首次显示前退出只保存偏好，保留原窗口几何。普通启动仍Show，所有路径均不自动恢复设备连接。
+
 `WindowsSerialDevices`使用SetupAPI只读枚举在场设备，从设备注册表的PortName取得实际COM，从SPDRP_FRIENDLYNAME/DEVICEDESC取得设备管理器友好名称。`PortInfo`将显示文本和COM身份分离，`PortCatalog`合并当前设备、SERIALCOMM兜底及历史。GUI的选中内容、下拉项和换行详情保留完整名称，生成ConnectionProfile时映射为COM号；名称不参与命名管道或CreateFile路径。历史额外保存DeviceName供离线辨认，当前系统名称优先于旧缓存；旧记录缺失该字段不影响加载。
 
 主窗口关闭仅隐藏到托盘，显式退出会等待所有实例停止。使用说明放在独立HTML/Markdown文档；GUI只显示连接设置、实际端点及状态，不内嵌终端工具教程。

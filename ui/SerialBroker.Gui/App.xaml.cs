@@ -6,6 +6,19 @@ namespace SerialBroker.Gui;
 public partial class App : Application
 {
     internal bool SuppressStartupWindow { get; set; }
+    internal static (string DataDirectory, bool StartInTray) ParseArguments(string[] args)
+    {
+        string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SerialBroker", "workspace");
+        bool startInTray = false, hasDirectory = false;
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--start-in-tray" && !startInTray) startInTray = true;
+            else if (args[i] == "--data-directory" && !hasDirectory && i + 1 < args.Length && !args[i + 1].StartsWith("--"))
+            { directory = Path.GetFullPath(args[++i]); hasDirectory = true; }
+            else throw new ArgumentException("支持 --data-directory PATH 和 --start-in-tray，参数不能重复");
+        }
+        return (directory, startInTray);
+    }
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -13,15 +26,10 @@ public partial class App : Application
         try
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SerialBroker", "workspace");
-            if (e.Args.Length != 0)
-            {
-                if (e.Args.Length != 2 || e.Args[0] != "--data-directory") throw new ArgumentException("仅支持 --data-directory PATH");
-                directory = Path.GetFullPath(e.Args[1]);
-            }
-            var window = new WorkspaceWindow(directory);
+            var options = ParseArguments(e.Args);
+            var window = new WorkspaceWindow(options.DataDirectory);
             MainWindow = window;
-            window.Show();
+            window.Start(options.StartInTray);
         }
         catch (Exception ex) { MessageBox.Show(ex.Message, "Serial Broker 启动失败", MessageBoxButton.OK, MessageBoxImage.Error); Shutdown(1); }
     }
